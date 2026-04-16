@@ -1,0 +1,27 @@
+# Maven build outputs
+**/target/
+target/
+*.jar
+*.war
+*.ear
+
+# IDEs and Editors
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files (local only)
+.env
+.env.local
+
+# Logs
+*.log
+logs/

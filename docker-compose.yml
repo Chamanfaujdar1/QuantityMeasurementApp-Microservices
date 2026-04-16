@@ -1,0 +1,133 @@
+services:
+
+  # ─────────────────────────────────────────
+  # MySQL for auth-service
+  # ─────────────────────────────────────────
+  mysql-auth:
+    image: mysql:8.0
+    container_name: mysql-auth
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: authdb
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql-auth-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot123"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - qma-network
+
+  # ─────────────────────────────────────────
+  # MySQL for measurement-service + history-service (shared schema)
+  # ─────────────────────────────────────────
+  mysql-quantity:
+    image: mysql:8.0
+    container_name: mysql-quantity
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: quantitydb
+    ports:
+      - "3308:3306"
+    volumes:
+      - mysql-quantity-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot123"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - qma-network
+
+  # ─────────────────────────────────────────
+  # Auth Service (port 8081)
+  # ─────────────────────────────────────────
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: auth-service
+    ports:
+      - "8081:8081"
+    depends_on:
+      mysql-auth:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    networks:
+      - qma-network
+    restart: on-failure
+
+  # ─────────────────────────────────────────
+  # Measurement Service (port 8082)
+  # ─────────────────────────────────────────
+  measurement-service:
+    build:
+      context: ./measurement-service
+      dockerfile: Dockerfile
+    container_name: measurement-service
+    ports:
+      - "8082:8082"
+    depends_on:
+      mysql-quantity:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    networks:
+      - qma-network
+    restart: on-failure
+
+  # ─────────────────────────────────────────
+  # History Service (port 8083)
+  # ─────────────────────────────────────────
+  history-service:
+    build:
+      context: ./history-service
+      dockerfile: Dockerfile
+    container_name: history-service
+    ports:
+      - "8083:8083"
+    depends_on:
+      mysql-quantity:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    networks:
+      - qma-network
+    restart: on-failure
+
+  # ─────────────────────────────────────────
+  # API Gateway (port 8080) — starts last
+  # ─────────────────────────────────────────
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    ports:
+      - "8080:8080"
+    depends_on:
+      - auth-service
+      - measurement-service
+      - history-service
+    environment:
+      AUTH_SERVICE_HOST: auth-service
+      MEASUREMENT_SERVICE_HOST: measurement-service
+      HISTORY_SERVICE_HOST: history-service
+    networks:
+      - qma-network
+    restart: on-failure
+
+# ─────────────────────────────────────────
+# Volumes & Network
+# ─────────────────────────────────────────
+volumes:
+  mysql-auth-data:
+  mysql-quantity-data:
+
+networks:
+  qma-network:
+    driver: bridge
